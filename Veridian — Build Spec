@@ -1,0 +1,508 @@
+# Veridian — Build Spec
+
+> **Veridian** is a meditative, infinite fidget. A 10-point star whose concentric rings respond to your touch like ripples — push, twist, pinch, breathe. Pocket calm.
+
+The name comes from *viridian* (the deep blue-green of the metallic finish on the original physical toy that inspired this app) crossed with *meridian* (a center line, an axis, a moment of equilibrium). It's pronounceable, available, and trademarkable in the App Store / Play Store namespace at the time of this writing — you'll want to verify before submitting.
+
+---
+
+## 0. What this document is
+
+A handoff spec to take the working HTML prototype (`star-fidget.html`) and turn it into a production-ready Expo app shippable to the iOS App Store, Google Play Store, and the web. It's written to be executable by Claude Code: each phase has explicit deliverables, acceptance criteria, and the exact CLI commands to run.
+
+The prototype is the **source of truth for behavior**. The spec defines the **architecture** to support that behavior across three platforms.
+
+---
+
+## 1. Scope
+
+### v1.0 ships with
+- Single-screen fidget experience, fullscreen
+- Single-touch joystick (lateral push + pull-up to extend)
+- Two-finger twist + pinch (gesture composition)
+- Spring-back physics with configurable params
+- Floating, draggable Tuner panel (Photoshop-style)
+- 4 named presets
+- Settings persist locally between sessions
+- iOS, Android, Web from one codebase
+
+### v1.0 explicitly does NOT include
+- Multi-handle / multi-puppet input *(deferred to v1.1 — own design pass)*
+- Cloud sync of settings *(maybe v1.2)*
+- Sound or audio reactivity
+- Sharing screenshots/videos
+- Onboarding tour beyond a single first-launch hint
+- Accounts or auth of any kind
+
+### Hard non-goals
+- No analytics that aren't strictly anonymous (this is a meditative app; we should not be watching people)
+- No ads, ever
+- No notifications
+
+---
+
+## 2. Tech stack — locked-in versions
+
+Based on what's current as of May 2026:
+
+| Layer | Choice | Version | Why |
+|---|---|---|---|
+| Framework | Expo SDK | **55.x** | Latest stable (released Feb 25, 2026). Includes RN 0.83, New Architecture by default, Hermes. |
+| Language | TypeScript | strict mode | Catches whole classes of bugs at compile time. |
+| Routing | Expo Router | v6 (bundled w/ SDK 55) | One screen for now, but sets us up for settings page / about page without thinking. |
+| Rendering | `@shopify/react-native-skia` | latest compatible | GPU-accelerated 2D drawing. Same fillPath + stroke approach as our HTML canvas, but native. Web build via CanvasKit. |
+| Animation | `react-native-reanimated` v3 | bundled by Skia | Animation runs on UI thread via worklets — no JS bridge cost during gestures. Required by Skia. |
+| Gestures | `react-native-gesture-handler` v2 | latest | Composable gesture system. Multi-touch for our twist/pinch. |
+| State | `zustand` | latest | Tiny, no boilerplate. The slider params are global enough to justify a store. |
+| Persistence | `expo-secure-store` for any future user data; `@react-native-async-storage/async-storage` for tuner params | latest | Async-storage is fine for non-sensitive settings; secure-store for future. |
+| Haptics | `expo-haptics` | bundled | Subtle ticks on extension thresholds, gesture lock-in. |
+| Build/submit | EAS Build + EAS Submit | current | Native builds in the cloud, submit to both stores from one command. |
+| Web hosting | EAS Hosting (or Cloudflare Pages) | — | TBD; EAS Hosting is integrated but Cloudflare Pages is free and great. Decide at launch. |
+
+### Project starter
+```bash
+npx create-expo-app@latest veridian --template with-skia
+```
+The `with-skia` template includes Reanimated, Gesture Handler, and Skia preconfigured for both native and web.
+
+---
+
+## 3. Repo structure
+
+```
+veridian/
+├── app/                          # Expo Router pages
+│   ├── _layout.tsx               # Root: providers (gesture handler, safe area, theme)
+│   └── index.tsx                 # The fidget screen — the only screen
+│
+├── src/
+│   ├── fidget/                   # The puzzle itself
+│   │   ├── Fidget.tsx            # Top-level Skia <Canvas> component
+│   │   ├── Rings.tsx             # Concentric star rings (Skia <Path>s)
+│   │   ├── geometry.ts           # Pure functions: starVertices(), starPath()
+│   │   ├── color.ts              # Pure functions: colorAt(t), gradient stops
+│   │   ├── physics.ts            # Spring + friction worklets (Reanimated)
+│   │   └── gestures.ts           # Joystick gesture, two-finger twist+pinch
+│   │
+│   ├── tuner/                    # The floating tool window
+│   │   ├── Tuner.tsx             # The panel container with title bar
+│   │   ├── DraggableWindow.tsx   # Generic draggable floating window
+│   │   ├── Slider.tsx            # Big-thumb slider (matches prototype)
+│   │   ├── Toggle.tsx            # Custom switch
+│   │   ├── PresetButtons.tsx     # Preset selector
+│   │   └── sections.ts           # Declarative panel sections (data → UI)
+│   │
+│   ├── state/
+│   │   ├── params.ts             # zustand store for tuner params
+│   │   ├── presets.ts            # Named preset definitions
+│   │   └── persist.ts            # AsyncStorage hydration / save
+│   │
+│   ├── theme/
+│   │   ├── colors.ts             # Background, panel, accent colors
+│   │   └── tokens.ts             # Spacing, radii, typography scale
+│   │
+│   └── platform/
+│       ├── haptics.ts            # Wrapper that no-ops on web
+│       └── env.ts                # Platform detection helpers
+│
+├── assets/
+│   ├── icon.png                  # 1024×1024, no transparency
+│   ├── adaptive-icon.png         # Android foreground layer (1024×1024)
+│   ├── splash-icon.png           # 1242×2436, will be centered on bg
+│   ├── favicon.png               # 48×48 web favicon
+│   └── og-image.png              # 1200×630 social card for web
+│
+├── app.json                      # Expo config (see §6)
+├── eas.json                      # EAS Build/Submit config (see §7)
+├── package.json
+├── tsconfig.json
+├── .gitignore
+├── README.md                     # Dev setup, scripts, architecture overview
+├── PRIVACY.md                    # Privacy policy (req. for stores)
+└── LICENSE                       # Decide: MIT? proprietary?
+```
+
+---
+
+## 4. Phase plan
+
+Each phase is a Claude Code session. **Don't merge phases.** The acceptance criteria at the end of each must pass before moving on.
+
+### Phase 1 — Project skeleton
+**Goal:** A blank Expo app that renders "Hello, Veridian" on iOS, Android, and web, with all dependencies installed and the file tree from §3 stubbed in (empty files OK).
+
+**Tasks:**
+1. `npx create-expo-app@latest veridian --template with-skia`
+2. Add TypeScript strict mode to `tsconfig.json`
+3. `npx expo install zustand @react-native-async-storage/async-storage expo-haptics expo-router react-native-safe-area-context`
+4. Set up Expo Router as described in docs (move `App.tsx` → `app/_layout.tsx` + `app/index.tsx`)
+5. Stub all files from §3 with `// TODO` placeholders
+6. Wire providers in `_layout.tsx`: `GestureHandlerRootView`, `SafeAreaProvider`
+7. Verify it runs on all three platforms
+
+**Acceptance:**
+- `npx expo start` opens with Web, iOS sim, Android sim (Press w / i / a) all rendering the placeholder screen
+- No TypeScript errors
+- No console warnings about missing peer deps
+
+---
+
+### Phase 2 — Geometry + color (no UI yet)
+**Goal:** The pure-function core ported from the prototype, fully typed, fully tested.
+
+**Tasks:**
+1. Port `starVertices(cx, cy, outerR, innerR, points, rotationRad)` from prototype to `src/fidget/geometry.ts`
+2. Add `starPath(...)` that returns a `SkPath` (Skia path object) — this is what we'll render
+3. Port the metallic gradient `colorAt(t)` to `src/fidget/color.ts` with the same gradient stops as the latest prototype (purple → blue → teal → bright green at center)
+4. Add Vitest config and write unit tests for both modules
+5. Document each function with TSDoc
+
+**Acceptance:**
+- `npm test` passes
+- Calling `starPath(0, 0, 100, 78, 10, 0)` returns a valid SkPath with 20 vertices
+- `colorAt(0)` returns purple, `colorAt(1)` returns bright green, intermediate values lerp correctly
+
+---
+
+### Phase 3 — Render the fidget (static, no input)
+**Goal:** A `<Fidget />` component that draws the concentric rings on screen using params from the zustand store. Static — no gestures yet.
+
+**Tasks:**
+1. Create the zustand store in `src/state/params.ts` with all tunables from the prototype + their default values
+2. Build `Fidget.tsx` with a `<Canvas>` from Skia
+3. Inside, render N rings using the geometry/color modules
+4. Each ring: `<Path path={starPath(...)} color={colorAt(t)} />` plus a stroke with darker color for the outline
+5. Verify on all three platforms
+
+**Acceptance:**
+- The fidget renders identically (within a few px) on iOS sim, Android sim, and web at the same window size
+- Changing default values in the store changes what's drawn (manual test by editing the file)
+- 60 fps idle (use Skia's built-in `useFrameCallback` to render an FPS counter for verification)
+
+---
+
+### Phase 4 — Joystick gesture (single touch)
+**Goal:** Single-finger drag works the same as in the prototype: anywhere on screen becomes the gesture origin, drag vector pushes the rings, pull up beyond the float ring extends.
+
+**Tasks:**
+1. In `src/fidget/physics.ts`, write Reanimated worklets for spring physics on shared values `kx`, `ky`, `kz` (the joystick state from prototype)
+2. In `src/fidget/gestures.ts`, build a `Pan` gesture from gesture-handler that drives the shared values
+3. In `Fidget.tsx`, use `useDerivedValue` to compute per-ring offsets from `kx, ky, kz` and feed them into the Skia paths via `useComputedValue` (so the redraw stays on the UI thread)
+4. Render the dashed float-circle indicator from the prototype
+
+**Acceptance:**
+- Touch anywhere → drag → rings deform exactly as in the prototype
+- Release → spring back (or stay put if springBack is off)
+- 60 fps under continuous drag
+- No JS-thread frame drops (verify with Reanimated devtools)
+
+---
+
+### Phase 5 — Multi-touch: twist + pinch
+**Goal:** Second finger triggers twist + pinch composite gesture. Same behavior as prototype.
+
+**Tasks:**
+1. Add a two-finger gesture (`Pinch` composed with a custom rotate detector) that drives:
+   - Rotation of all rings (`userSpin` shared value)
+   - Vertical extension (`kz` shared value) via finger spread distance
+2. Handle mode transitions (one finger → two fingers → back to one) cleanly
+3. Spin momentum with friction after release
+4. Hook up `expo-haptics` for a subtle tick when crossing 50% extension
+
+**Acceptance:**
+- Two fingers → twist works, persists rotation after release with friction
+- Two fingers → pinch out → puzzle extends; pinch in → collapses
+- Both gestures simultaneously: yes
+- Adding a 2nd finger mid-drag: smooth transition into 2-finger mode
+- Lifting one of two fingers: falls back to joystick from remaining touch
+
+---
+
+### Phase 6 — Tuner panel (the floating tool window)
+**Goal:** Photoshop-style tool window from the prototype, native-feeling on each platform.
+
+**Tasks:**
+1. Build `DraggableWindow.tsx` — generic floating panel with title bar drag, collapse, close
+2. Use gesture-handler for the title-bar drag (clamped to safe area)
+3. Build `Slider.tsx` — large thumb (28px+) for mobile, native feel
+4. Build `Toggle.tsx`
+5. Build `Tuner.tsx` — composes everything, declaratively driven by `sections.ts`
+6. Wire all sliders to the zustand store
+7. Add the 4 presets from the prototype as buttons
+
+**Acceptance:**
+- Tuner appears in top-right by default, can be dragged anywhere on screen
+- Title bar buttons: collapse (–), close (×) work
+- When closed, a small floating "open tuner" button appears in the corner
+- Sliders update params live; fidget reacts in real time
+- Presets snap all values to the named config
+- Panel survives device rotation (position re-clamps to viewport)
+
+---
+
+### Phase 7 — Persistence + first-run experience
+**Goal:** Settings survive app restarts. First-launch shows a minimal hint.
+
+**Tasks:**
+1. In `src/state/persist.ts`, hydrate the zustand store from AsyncStorage on app start
+2. Subscribe to store changes and persist (debounced)
+3. Add a one-time first-launch hint overlay (auto-dismisses on first interaction)
+4. Reset-to-defaults button in the Tuner panel
+
+**Acceptance:**
+- Change a slider, force-quit the app, reopen → the value is preserved
+- Fresh install shows the hint; second launch does not
+- Reset button restores all defaults
+- No flash of default-then-hydrated state on launch (use a splash screen if needed)
+
+---
+
+### Phase 8 — Polish
+**Goal:** App feels finished. Each platform has the right native touches.
+
+**Tasks:**
+1. App icon + adaptive icon + splash screen (Skia-rendered? Or static asset?)
+2. iOS: launch screen, supported orientations (portrait + landscape both)
+3. Android: edge-to-edge, status bar styling
+4. Web: favicon, OG image, page title, meta description
+5. Light / dark theme support (the puzzle is dark by default, but UI chrome should respect system theme)
+6. Accessibility: VoiceOver / TalkBack labels on all controls (the fidget itself isn't really accessible — that's OK, it's visual)
+7. README with screenshots and dev instructions
+8. Privacy policy (boilerplate is fine — we collect nothing)
+
+**Acceptance:**
+- Runs in landscape and portrait on both platforms
+- Icon visible on home screen, looks good
+- Web: shareable URL produces a nice OG card
+- Lighthouse score > 90 on web
+- Build artifacts clean: no warnings from `expo-doctor`
+
+---
+
+### Phase 9 — Ship
+**Goal:** In review on both stores, web live.
+
+**Tasks:**
+1. Configure EAS Build profiles (`eas.json` — see §7)
+2. Configure EAS Submit credentials (Apple Developer + Google Play accounts required)
+3. App Store Connect + Play Console listings (see §8 for copy)
+4. Screenshots: per-device-class for iOS, per-form-factor for Android
+5. `eas build --platform all --profile production`
+6. `eas submit --platform all`
+7. Web: `npx expo export --platform web` → deploy `dist/` to Cloudflare Pages or EAS Hosting
+
+**Acceptance:**
+- Builds pass for both platforms
+- Both submissions accepted into review (it's then in Apple/Google's hands)
+- Web URL is live and works on iOS Safari, Android Chrome, desktop Chrome/Safari/Firefox
+
+---
+
+## 5. Custom URL scheme — `veridian://`
+
+Since v1 has no inbound deep links to handle, the scheme is mostly for future-proofing — sharing presets, opening from a system action, etc. Register it now so we don't have to deal with a re-review later.
+
+In `app.json`:
+```json
+{
+  "expo": {
+    "scheme": "veridian"
+  }
+}
+```
+
+This makes `veridian://` openable on iOS and Android. For web, we'll use a regular URL (e.g. `veridian.app/preset/floaty`) once we own the domain.
+
+**v1 routes claimed (even if not implemented yet):**
+- `veridian://` — opens the app to the fidget
+- `veridian://preset/<name>` — opens with a named preset loaded
+- `veridian://share/<encoded-params>` — opens with a custom param set (basis of "share my fidget" feature in v1.1)
+
+Document these in the README so we don't accidentally repurpose them.
+
+---
+
+## 6. `app.json` — exact starting config
+
+```json
+{
+  "expo": {
+    "name": "Veridian",
+    "slug": "veridian",
+    "version": "1.0.0",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "scheme": "veridian",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0a0612"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "app.veridian.app",
+      "buildNumber": "1",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "app.veridian.app",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0a0612"
+      },
+      "edgeToEdgeEnabled": true
+    },
+    "web": {
+      "bundler": "metro",
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-haptics",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0a0612",
+          "image": "./assets/splash-icon.png"
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
+```
+
+You'll need to **buy `app.veridian.app`** (or whatever domain ends up matching) and use that as the bundle ID. The reverse-DNS bundle identifier convention helps both stores understand it's yours.
+
+---
+
+## 7. `eas.json` — build & submit config
+
+```json
+{
+  "cli": { "version": ">= 12.0.0" },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal",
+      "ios": { "simulator": true }
+    },
+    "production": {
+      "autoIncrement": true
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
+```
+
+Then:
+```bash
+eas build:configure   # one-time setup
+eas build --profile production --platform all
+eas submit --platform all --latest
+```
+
+---
+
+## 8. Store listings — copy
+
+### App name
+**Veridian**
+
+### Subtitle (iOS, 30 chars max)
+**An infinite fidget**
+
+### Short description (Play Store, 80 chars max)
+**A meditative fidget. Press, twist, breathe. Your pocket calm.**
+
+### Long description
+> Veridian is a meditative fidget you can hold in your pocket.
+>
+> A 10-point star, made of concentric rings that ripple in response to your touch. Push it. Twist it with two fingers. Pinch to extend it into a cone. Let it settle.
+>
+> No ads. No accounts. No notifications. No cloud. Nothing to chase, nothing to win.
+>
+> Just a small, beautiful object you can pick up when you need a moment.
+>
+> A built-in tuner lets you adjust how the fidget behaves — spring stiffness, ring follow, twist response, color, geometry — and save your favorite settings as presets.
+
+### Keywords (iOS, comma-separated, 100 chars max)
+`fidget, calm, meditation, focus, anxiety, stim, sensory, breathing, mindfulness, stress`
+
+### Category
+- iOS Primary: **Health & Fitness**
+- iOS Secondary: **Lifestyle**
+- Play Store: **Health & Fitness**
+
+### Content rating
+- iOS: 4+
+- Play Store: Everyone
+
+### Privacy
+- "We do not collect any data." (literally — and the listing should reflect this)
+- App Privacy section in App Store Connect: **Data Not Collected**
+- Play Store Data Safety: **No data collected**
+
+### Screenshots — minimum required
+- iOS: 6.7" iPhone (3 minimum) and 12.9" iPad (3 minimum, since `supportsTablet: true`)
+- Android: phone (2 minimum) and 7"+ tablet (2 minimum)
+- Each: show the fidget in flat state, extended state, and the tuner open
+
+### Marketing site
+- `veridian.app` — single landing page, embed of web build, App Store and Play Store badges, privacy policy link
+
+---
+
+## 9. Quality gates before "ready to ship"
+
+Each one of these has to be a "yes" or shipping is premature.
+
+- [ ] All Phase 1–9 acceptance criteria pass
+- [ ] `expo-doctor` returns clean
+- [ ] App is < 30 MB download size on both platforms (Skia adds ~6 MB; budget the rest)
+- [ ] Tested on a real low-end Android device (the spring physics on a $150 phone is the real test)
+- [ ] Tested on the oldest iOS device the SDK still supports (iPhone XS as of SDK 55)
+- [ ] Web build works in Safari (CanvasKit has historically been a sore spot here — verify)
+- [ ] Memory usage stable over 30 minutes of continuous use (no leaks from animation frames)
+- [ ] Battery impact < 5%/hour during active use (GPU rendering should be efficient, but verify)
+
+---
+
+## 10. Open questions to resolve before / during build
+
+These should be answered before they become blockers but they're not in the critical path for setup.
+
+1. **Logo / mark.** Is the fidget itself the logo, rendered to PNG at multiple sizes? Or is there a separate wordmark? My instinct: the fidget *is* the icon, drawn with Skia at build time and exported.
+2. **Marketing site.** Static landing page or embed the web build? Embedding is more authentic; static is simpler.
+3. **License.** Open source on GitHub or proprietary? If open: MIT. If not: keep the repo private.
+4. **Pricing.** Free, free with one-time IAP for "infinite presets" or extra colors, or paid up front? My read: free with no IAP for v1.0 — the simplicity is the brand. Add tip jar / "support development" IAP in v1.2 if it warrants it.
+5. **Domain.** Confirm `veridian.app` is available (`.app` is the right TLD — meaningful, requires HTTPS by default).
+6. **Trademark.** Veridian is a real word and is used by other companies in unrelated categories (a fund, a games studio). Check USPTO + EUIPO for conflicts in *Class 9 (mobile applications)* before committing.
+
+---
+
+## 11. Hand-off to Claude Code
+
+When ready, pass Claude Code:
+
+1. This spec (`SPEC.md`)
+2. The prototype (`star-fidget.html`) — the source of truth for behavior
+3. A clear instruction: **"Execute Phase 1. Stop and confirm acceptance criteria before starting Phase 2."**
+
+Each phase should be its own commit (or PR) with the acceptance criteria checklist filled in. The spec is a contract: if a phase is done, the criteria pass, full stop.
+
+---
+
+*Last updated: May 3, 2026*
