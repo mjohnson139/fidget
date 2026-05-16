@@ -683,6 +683,13 @@
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     audioCtx.resume();
 
+    // iOS requires playing a silent buffer to unlock the audio hardware
+    const unlock = audioCtx.createBuffer(1, 1, audioCtx.sampleRate);
+    const unlockSrc = audioCtx.createBufferSource();
+    unlockSrc.buffer = unlock;
+    unlockSrc.connect(audioCtx.destination);
+    unlockSrc.start(0);
+
     // Continuous metallic shimmer for spin — high-Q resonant noise
     const bufLen = audioCtx.sampleRate * 2;
     const noiseBuf = audioCtx.createBuffer(1, bufLen, audioCtx.sampleRate);
