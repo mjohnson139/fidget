@@ -377,7 +377,7 @@
 
     <label class="toggle">
       <span>spring back when released</span>
-      <input type="checkbox" id="spring-back" checked>
+      <input type="checkbox" id="spring-back">
       <span class="sw"></span>
     </label>
 
@@ -446,6 +446,9 @@
       <span class="v" id="v-pos">0, 0</span></label></div>
     <div class="row"><label>extension
       <span class="v" id="v-ext">0%</span></label></div>
+    <div class="preset-row">
+      <button id="btn-reset">Reset to center</button>
+    </div>
     </div><!-- /.panel-body -->
   </div><!-- /.panel -->
 </div>
@@ -566,7 +569,7 @@
     falloff: 1.40,
     spring: 0.18,
     damp: 0.78,
-    springBack: true,
+    springBack: false,
 
     points: 10,
     ratio: 0.78,
@@ -634,6 +637,14 @@
       }
     });
   }
+
+  document.getElementById('btn-reset').addEventListener('click', () => {
+    kx = 0; ky = 0; kz = 0;
+    vx = 0; vy = 0; vz = 0;
+    userSpin = 0; userSpinVel = 0;
+    target = null;
+    mode = 'idle';
+  });
 
   // ——— Color (metallic anodized blue→teal→green) ———
   // Gradient goes from purple at the outer edge into bright green at the center,
