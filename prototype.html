@@ -760,23 +760,11 @@
   function updateOne(clientX, clientY) {
     const totalDx = clientX - dragStartPx;
     const totalDy = clientY - dragStartPy;
-    let nx = dragStartKx + totalDx;
-    let ny = dragStartKy + totalDy;
-    const lateralDist = Math.hypot(nx, ny);
-    let nz = dragStartKz;
-    if (lateralDist > params.float) {
-      const excess = lateralDist - params.float;
-      if (totalDy < 0) {
-        nz = Math.min(params.pull, dragStartKz + Math.min(excess, -totalDy * 0.8));
-      }
-      const k = params.float / lateralDist;
-      nx *= k; ny *= k;
-    } else {
-      if (totalDy < -10 && Math.abs(totalDx) < 30) {
-        nz = Math.max(0, Math.min(params.pull, dragStartKz - totalDy));
-      }
-    }
-    target = { x: nx, y: ny, z: Math.max(0, nz) };
+    target = {
+      x: dragStartKx + totalDx,
+      y: dragStartKy + totalDy,
+      z: dragStartKz,
+    };
   }
 
   function updateTwo(e) {
