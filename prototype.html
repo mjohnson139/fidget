@@ -730,25 +730,38 @@
   }
 
   // Simple click: short noise burst through a high-pass filter
-  function playClick(vol = 1.0) {
+  // C pentatonic over two octaves — maps position → musical pitch
+  const PENTATONIC = [261, 294, 330, 392, 440, 523, 587, 659, 784, 880];
+
+  function posFreq() {
+    // Lateral displacement: 0 (center) = low note, far out = high note
+    const dist = Math.hypot(kx, ky);
+    const idx = Math.floor(Math.min(dist / 180, 0.999) * PENTATONIC.length);
+    return PENTATONIC[idx];
+  }
+
+  function spinFreq() {
+    // Spin angle cycles through the scale as you rotate
+    const idx = Math.floor(((userSpin % 360) + 360) % 360 / 360 * PENTATONIC.length);
+    return PENTATONIC[idx];
+  }
+
+  // Xylophone-style tonal click: sine burst + quiet harmonic, short decay
+  function playClick(vol = 1.0, freq = 440) {
     if (!audioCtx || !params.soundEnabled) return;
     const t = audioCtx.currentTime;
-    const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.03, audioCtx.sampleRate);
-    const data = buf.getChannelData(0);
-    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
-    const src = audioCtx.createBufferSource();
-    src.buffer = buf;
-    const filter = audioCtx.createBiquadFilter();
-    filter.type = 'bandpass';
-    filter.frequency.value = 700;
-    filter.Q.value = 0.8;
-    const gain = audioCtx.createGain();
-    gain.gain.setValueAtTime(vol, t);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.045);
-    src.connect(filter);
-    filter.connect(gain);
-    gain.connect(masterGain);
-    src.start(t);
+    [[freq, 0.45], [freq * 3.1, 0.12]].forEach(([f, g], i) => {
+      const osc  = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = f;
+      gain.gain.setValueAtTime(g * vol, t);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + (i === 0 ? 0.18 : 0.07));
+      osc.connect(gain);
+      gain.connect(masterGain);
+      osc.start(t);
+      osc.stop(t + 0.2);
+    });
   }
 
   // Soft descending ping on fling release
@@ -1017,13 +1030,13 @@
       if (clickAccumMove >= CLICK_PX) {
         clickAccumMove -= CLICK_PX;
         const speed = Math.hypot(vx, vy);
-        playClick(Math.min(0.9, 0.25 + speed * 0.08));
+        playClick(Math.min(0.9, 0.25 + speed * 0.08), posFreq());
       }
       const spinDelta = Math.abs(userSpin - prevSpin);
       clickAccumSpin += spinDelta;
       if (clickAccumSpin >= CLICK_DEG) {
         clickAccumSpin -= CLICK_DEG;
-        playClick(Math.min(0.8, 0.2 + Math.abs(userSpinVel) * 0.04));
+        playClick(Math.min(0.8, 0.2 + Math.abs(userSpinVel) * 0.04), spinFreq());
       }
     }
     prevKx = kx; prevKy = ky; prevSpin = userSpin;
