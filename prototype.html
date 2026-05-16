@@ -325,7 +325,7 @@
     </svg>
   </button>
 
-  <div class="panel" id="panel">
+  <div class="panel hidden" id="panel">
     <div class="panel-titlebar" id="panel-titlebar">
       <div class="panel-title"><span class="grip-dots">⋮⋮</span>Tuner</div>
       <button class="panel-btn" id="panel-collapse" aria-label="Collapse">
@@ -494,8 +494,8 @@
   }
   hideBtn.addEventListener('click', hidePanel);
   toolToggle.addEventListener('click', showPanel);
-  // Initial state: tool window visible, toggle hidden
-  toolToggle.classList.add('hidden');
+  // Initial state: panel hidden, wrench toggle visible
+  // (panel starts with class="panel hidden" in HTML)
 
   // Collapse / expand (just hides body, keeps title bar)
   collapseBtn.addEventListener('click', () => {
