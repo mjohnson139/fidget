@@ -676,8 +676,12 @@
   let spinGain = null, spinFilter = null;
 
   function initAudio() {
-    if (audioCtx) return;
+    if (audioCtx) {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      return;
+    }
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    audioCtx.resume();
 
     // Continuous metallic shimmer for spin — high-Q resonant noise
     const bufLen = audioCtx.sampleRate * 2;
