@@ -1170,6 +1170,12 @@
     ctx.stroke();
   }
 
+  // iOS requires audio unlock on every user gesture — attach to the whole
+  // document so any tap (canvas, panel, wrench button) guarantees the context
+  // is running before the first click sound is needed.
+  document.addEventListener('touchstart', initAudio, { passive: true });
+  document.addEventListener('mousedown',  initAudio, { passive: true });
+
   tick();
 })();
 </script>
