@@ -820,6 +820,13 @@
   // Target (when dragging), null otherwise
   let target = null;
 
+  // Click accumulators — fire a click every CLICK_PX of lateral movement
+  // or every CLICK_DEG of spin. Tracks previous positions to compute deltas.
+  let prevKx = 0, prevKy = 0, prevSpin = 0;
+  let clickAccumMove = 0, clickAccumSpin = 0;
+  const CLICK_PX  = 16;   // lateral pixels per click
+  const CLICK_DEG = 9;    // spin degrees per click
+
   // User-driven spin (degrees). Two-finger twist accumulates here. Persists
   // when fingers lift, so you can twist and let it sit.
   let userSpin = 0;
@@ -868,7 +875,6 @@
     dragStartKx = kx; dragStartKy = ky; dragStartKz = kz;
     dragStartPx = clientX; dragStartPy = clientY;
     cv.classList.add('grabbing');
-    playClick(0.75);
   }
 
   // Start two-finger twist+spread gesture
@@ -883,7 +889,6 @@
     lastGestureAngle  = gestureStartAngle;
     userSpinVel = 0;
     cv.classList.add('grabbing');
-    playClick(0.5);
   }
 
   function updateOne(clientX, clientY) {
@@ -920,8 +925,6 @@
   function endAll() {
     if (mode === 'two' && Math.abs(userSpinVel) > 2) {
       playFling(userSpinVel);
-    } else {
-      playClick(0.4);
     }
     mode = 'idle';
     target = null;
@@ -1005,6 +1008,24 @@
       userSpinVel *= params.spinCoast;  // friction / coast
       if (Math.abs(userSpinVel) < 0.005) userSpinVel = 0;
     }
+
+    // Movement clicks — fire once per CLICK_PX of lateral travel or CLICK_DEG of spin
+    if (audioCtx && params.soundEnabled) {
+      const moveDelta = Math.hypot(kx - prevKx, ky - prevKy);
+      clickAccumMove += moveDelta;
+      if (clickAccumMove >= CLICK_PX) {
+        clickAccumMove -= CLICK_PX;
+        const speed = Math.hypot(vx, vy);
+        playClick(Math.min(0.9, 0.25 + speed * 0.08));
+      }
+      const spinDelta = Math.abs(userSpin - prevSpin);
+      clickAccumSpin += spinDelta;
+      if (clickAccumSpin >= CLICK_DEG) {
+        clickAccumSpin -= CLICK_DEG;
+        playClick(Math.min(0.8, 0.2 + Math.abs(userSpinVel) * 0.04));
+      }
+    }
+    prevKx = kx; prevKy = ky; prevSpin = userSpin;
 
     // Drive metallic spin shimmer — gain and filter frequency track spin speed
     if (spinGain && params.soundEnabled) {
