@@ -17,8 +17,12 @@ The physical reference is a real 10-pointed star fidget toy. The software refere
 ```
 fidget/                          ← repo root
 ├── CLAUDE.md                    ← you are here — read first
-├── prototype.html               ← physics + rendering reference
+├── prototype.html               ← physics + rendering reference (also live on GitHub Pages)
+├── index.html                   ← redirects to prototype.html (GitHub Pages entry point)
 ├── README.md                    ← human-readable overview
+├── .github/
+│   └── workflows/
+│       └── pages.yml            ← deploys repo root to GitHub Pages on every push
 ├── context/                     ← PRIMARY LAYER — read before touching code
 │   ├── 01_architecture.md       ← canonical technical decisions and stack
 │   ├── sprint-NN-requirements.md ← active sprint spec and verification checklist
@@ -26,7 +30,8 @@ fidget/                          ← repo root
 │       ├── 001-skia-renderer.md
 │       ├── 002-reanimated-worklets-physics.md
 │       ├── 003-no-backend.md
-│       └── 004-documentation-first-repo-structure.md
+│       ├── 004-documentation-first-repo-structure.md
+│       └── 005-github-pages-prototype-hosting.md
 └── FidgetApp/                   ← ALL Expo app code lives here
     ├── app/                     ← Expo Router screens
     ├── src/                     ← engine, components, audio, haptics, store
@@ -48,7 +53,20 @@ Do these in order. Do not skip.
 
 3. **Read the relevant ADR** — if you are making or questioning a significant technical decision, check `context/decisions/` first. The decision may already be made and recorded.
 
-4. **Check the prototype** — `prototype.html` is the source of truth for physics behavior. Open it in a browser if you need to understand how a parameter affects the fidget. Match its feel, not its code structure.
+4. **Check the prototype** — `prototype.html` is the source of truth for physics behavior. The live version is at `https://mjohnson139.github.io/fidget/prototype.html` (updates ~30s after any push). Match its feel, not its code structure.
+
+---
+
+## Prototype Iteration
+
+`prototype.html` is served live via GitHub Pages. The iteration loop is:
+
+1. Human describes a change to the fidget feel, visuals, or physics
+2. Agent edits `prototype.html`, commits, pushes (any branch)
+3. GitHub Actions deploys in ~30 seconds
+4. Human tests at `https://mjohnson139.github.io/fidget/prototype.html`
+
+**Do not** add dependencies, a build step, or split `prototype.html` into multiple files. It must remain a single self-contained file that the Pages workflow can serve without compilation. See ADR-005.
 
 ---
 
@@ -107,6 +125,8 @@ These constraints are set by ADRs. Do not work around them without opening a new
 | No `runOnJS` inside the frame loop except audio/haptic triggers | Every JS bridge crossing is a potential frame drop | 002 |
 | New significant technical decisions get an ADR in `context/decisions/` | Decisions must survive across sessions | 004 |
 | `CLAUDE.md` is updated when repo structure or conventions change | A stale orientation file misleads future agents | 004 |
+| `.github/workflows/pages.yml` and `index.html` must not be deleted or repurposed | They are the prototype iteration infrastructure, not app code | 005 |
+| Do not add a build step to the Pages workflow | `prototype.html` is self-contained; a build step would add friction with no benefit | 005 |
 
 ---
 
