@@ -436,6 +436,11 @@
       <input type="range" id="spinSensitivity" min="0.25" max="4.0" step="0.05" value="1.0">
     </div>
 
+    <div class="row">
+      <label>volume <span class="v" id="v-volume">0.80</span></label>
+      <input type="range" id="volume" min="0" max="1" step="0.05" value="0.8">
+    </div>
+
     <label class="toggle">
       <span>sound</span>
       <input type="checkbox" id="sound-enabled" checked>
@@ -599,6 +604,7 @@
     spinCoast: 0.96,
     spinSensitivity: 1.0,
     soundEnabled: true,
+    volume: 0.8,
 
     outline: 60,
   };
@@ -627,6 +633,11 @@
   bind('spinCoast',       'spinCoast',       v => +v, v => v.toFixed(3));
   bind('spinSensitivity', 'spinSensitivity', v => +v, v => v.toFixed(2));
   bind('outline','outline',v => +v);
+  document.getElementById('volume').addEventListener('input', e => {
+    params.volume = +e.target.value;
+    document.getElementById('v-volume').textContent = params.volume.toFixed(2);
+    if (masterGain) masterGain.gain.value = params.volume;
+  });
 
   document.getElementById('twist-extended-only').addEventListener('change', e => {
     params.twistExtendedOnly = e.target.checked;
@@ -674,6 +685,7 @@
   // ——— Web Audio: metallic click synthesizer ———
   let audioCtx = null;
   let spinGain = null, spinFilter = null;
+  let masterGain = null;
 
   function initAudio() {
     if (audioCtx) {
@@ -704,12 +716,16 @@
     spinFilter.frequency.value = 3200;
     spinFilter.Q.value = 18;          // narrow & resonant = metallic shimmer
 
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = params.volume;
+    masterGain.connect(audioCtx.destination);
+
     spinGain = audioCtx.createGain();
     spinGain.gain.value = 0;
 
     noiseNode.connect(spinFilter);
     spinFilter.connect(spinGain);
-    spinGain.connect(audioCtx.destination);
+    spinGain.connect(masterGain);
     noiseNode.start();
   }
 
@@ -727,7 +743,7 @@
       gain.gain.setValueAtTime(g * vol, t);
       gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
       osc.connect(gain);
-      gain.connect(audioCtx.destination);
+      gain.connect(masterGain);
       osc.start(t);
       osc.stop(t + 0.1);
     });
@@ -748,7 +764,7 @@
       gain.gain.setValueAtTime(g * strength, t);
       gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.38);
       osc.connect(gain);
-      gain.connect(audioCtx.destination);
+      gain.connect(masterGain);
       osc.start(t);
       osc.stop(t + 0.4);
     });
