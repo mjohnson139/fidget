@@ -739,11 +739,12 @@
     const src = audioCtx.createBufferSource();
     src.buffer = buf;
     const filter = audioCtx.createBiquadFilter();
-    filter.type = 'highpass';
-    filter.frequency.value = 1800;
+    filter.type = 'bandpass';
+    filter.frequency.value = 700;
+    filter.Q.value = 0.8;
     const gain = audioCtx.createGain();
     gain.gain.setValueAtTime(vol, t);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.025);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.045);
     src.connect(filter);
     filter.connect(gain);
     gain.connect(masterGain);
@@ -1027,16 +1028,8 @@
     }
     prevKx = kx; prevKy = ky; prevSpin = userSpin;
 
-    // Drive metallic spin shimmer — gain and filter frequency track spin speed
-    if (spinGain && params.soundEnabled) {
-      const absVel = Math.abs(userSpinVel);
-      const targetGain = Math.min(0.35, absVel * 0.035);
-      const targetFreq = 2400 + absVel * 180;
-      spinGain.gain.setTargetAtTime(targetGain, audioCtx.currentTime, 0.04);
-      spinFilter.frequency.setTargetAtTime(Math.min(7000, targetFreq), audioCtx.currentTime, 0.04);
-    } else if (spinGain && !params.soundEnabled) {
-      spinGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.02);
-    }
+    // Spin shimmer disabled — ratchet clicks only
+    if (spinGain) spinGain.gain.value = 0;
 
     posLabel.textContent =
       `${kx.toFixed(0)}, ${ky.toFixed(0)}`;
