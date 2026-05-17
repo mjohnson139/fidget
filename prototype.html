@@ -903,10 +903,11 @@
   function updateOne(clientX, clientY) {
     const totalDx = clientX - dragStartPx;
     const totalDy = clientY - dragStartPy;
+    const nz = Math.max(-params.pull, Math.min(params.pull, dragStartKz - totalDy * 0.8));
     target = {
       x: dragStartKx + totalDx,
       y: dragStartKy + totalDy,
-      z: dragStartKz,
+      z: nz,
     };
   }
 
@@ -1054,7 +1055,7 @@
     const cy = cv.clientHeight / 2;
 
     // Contact shadow
-    const extension = Math.min(1, kz / Math.max(1, params.pull));
+    const extension = Math.max(-1, Math.min(1, kz / Math.max(1, params.pull)));
     const shadowAlpha = 0.55 - extension * 0.25;
     const shadowR = params.outer * 0.95;
     const grd = ctx.createRadialGradient(cx, cy + 6, 0, cx, cy + 6, shadowR);
