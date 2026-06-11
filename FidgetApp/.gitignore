@@ -9,6 +9,10 @@ dist/
 web-build/
 expo-env.d.ts
 
+# Skia web: regenerated from node_modules by `npm run setup:skia-web`
+# (also runs on postinstall). Version-matched 8MB binary, not source.
+public/canvaskit.wasm
+
 # Native
 .kotlin/
 *.orig.*

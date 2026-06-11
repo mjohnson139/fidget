@@ -35,7 +35,9 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "generate:assets": "node scripts/generate-sounds.js && node scripts/generate-icons.js"
+    "generate:assets": "node scripts/generate-sounds.js && node scripts/generate-icons.js",
+    "setup:skia-web": "setup-skia-web public",
+    "postinstall": "setup-skia-web public"
   },
   "private": true
 }

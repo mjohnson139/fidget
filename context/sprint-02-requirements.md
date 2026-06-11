@@ -81,13 +81,59 @@ The only JS-bridge crossings in the run loop, all via `useAnimatedReaction → r
 4. Physics, gradient stops, parameter ranges and defaults match `prototype.html` exactly — **agent-verified by construction (verbatim port)**
 5. App boots and is interactive on iOS simulator, Android emulator, and Web — **HUMAN VERIFICATION REQUIRED**
 6. Sounds and haptics fire on compress/release/twist on a physical device — **HUMAN VERIFICATION REQUIRED**
-7. EAS preview build succeeds — **HUMAN VERIFICATION REQUIRED** (blocked on `eas init`, see below)
+7. EAS preview build succeeds — **agent-verified ✅ (Android)** — see EAS Handoff Results below.
 
-## Manual Prerequisites (carried over from Sprint 01, still open)
+## Manual Prerequisites (carried over from Sprint 01)
 
-1. `eas login` + `eas init` from `FidgetApp/` to register the project and write `expo.extra.eas.projectId` into `app.json`. Commit the result.
-2. Link the GitHub repo in the EAS dashboard so `.eas/workflows/build.yml` fires on push to `main`.
-3. For store submission: Apple Developer / Play Console accounts wired into `eas submit` (profiles already in `eas.json`).
+1. ✅ **Done** — `eas init` ran under the `mjohnson139` account (slug `fidget`).
+   `expo.extra.eas.projectId` = `ece3b6be-6b03-483c-b0fe-0988433184a2` and
+   `expo.owner` = `mjohnson139` are committed in `app.json`.
+2. ⏳ **Human step** — Link the GitHub repo in the EAS dashboard (project →
+   GitHub) so `.eas/workflows/build.yml` fires on push to `main`. There is no
+   CLI for this. Verify after the next `main` push that a workflow run appears.
+3. ⏳ **Human step (store submission)** — Apple Developer / Play Console
+   accounts wired into `eas submit` (profiles already in `eas.json`).
+
+## EAS Handoff Results (2026-06-11)
+
+- **Project:** https://expo.dev/accounts/mjohnson139/projects/fidget
+  (ID `ece3b6be-6b03-483c-b0fe-0988433184a2`)
+- **Android preview build:** ✅ **finished** —
+  https://expo.dev/accounts/mjohnson139/projects/fidget/builds/d721158e-10e4-4c42-bb74-aeda64fbc86a
+  — profile `preview`, internal distribution, installable APK
+  (`https://expo.dev/artifacts/eas/YEHkjIuUjx29cLAcuOGmfgUjEGlwQIu0E2W87I1A00g.apk`).
+  Android keystore was generated automatically by EAS (`--non-interactive`).
+  Installs directly on any Android device — no developer account, no Expo Go.
+- **iOS preview build:** ⏳ **Human step** — internal distribution needs an
+  Apple Developer account + registered device UDIDs (ad-hoc provisioning).
+  Run `eas build --profile preview --platform ios` (it prompts for Apple
+  credentials) or `eas device:create` first. Not attempted non-interactively.
+- **Web build (EAS Hosting):** ✅ **deployed** — https://fidget.expo.app
+  (production alias). Credential-free browser test surface. NOTE: this app
+  cannot run in **Expo Go** — `@shopify/react-native-skia` is a native module
+  Expo Go does not bundle, so a development/preview build (or web) is required.
+  See "Web target / CanvasKit" below.
+
+### Web target / CanvasKit (divergence — discovered during EAS handoff)
+
+`npx expo export -p web` *bundles* successfully (acceptance criterion 3), but
+that only proved the bundle compiles — it never rendered. The app's renderer is
+Skia, and on web Skia draws through **CanvasKit (WASM)**, which must be fetched
+and initialized *before* any `<Canvas>` mounts. The MVP shipped with no web
+CanvasKit loader, so the first web deploy was a blank screen.
+
+Fix (committed):
+- `npx setup-skia-web public` copies the version-matched `canvaskit.wasm` into
+  `FidgetApp/public/` (served at `/canvaskit.wasm`). This is wired into a
+  `postinstall` + `setup:skia-web` npm script so it is regenerated on install
+  and never re-introduces the blank-screen bug. The wasm is gitignored (8 MB,
+  regenerable from node_modules).
+- `src/components/useSkiaWebReady.ts` — returns `true` immediately on native;
+  on web it awaits `LoadSkiaWeb()` and flips to `true` once CanvasKit is ready.
+- `app/index.tsx` gates `<FidgetCanvas>` on `useSkiaWebReady()`.
+
+Web remains a secondary "feel-check" target, not the perf reference. The native
+APK is the real test surface.
 
 ---
 
