@@ -150,7 +150,7 @@ These constraints are set by ADRs. Do not work around them without opening a new
 
 **Sprint 02** — `context/sprint-02-requirements.md`
 
-Status: Implemented — full MVP (physics, Skia rendering, gestures, tuner, presets, sound, haptics, store config) built on Expo SDK 56. Remaining items are human-only: `eas init`, live device testing, EAS dashboard repo link. See the sprint doc's Manual Prerequisites.
+Status: Implemented + EAS-linked — full MVP (physics, Skia rendering, gestures, tuner, presets, sound, haptics, store config) built on Expo SDK 56. `eas init` is done (project `fidget` under `mjohnson139`, projectId in `app.json`) and the first Android preview build ran on EAS. Remaining items are human-only: live device testing, the iOS preview build (Apple Developer credentials), and linking the GitHub repo in the EAS dashboard so `.eas/workflows/build.yml` fires on push to `main`. See the sprint doc's Manual Prerequisites and EAS Handoff Results.
 
 Note: the app uses Expo SDK 56 / Reanimated 4 / Skia 2.x — newer than the versions named in `context/01_architecture.md` (SDK 53 era). The sprint-02 doc has the reconciliation table. ADR-006 (manual gesture port) and ADR-007 (procedural assets) record where the implementation deliberately diverges from the architecture doc.
 
