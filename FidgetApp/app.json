@@ -43,6 +43,12 @@
           "backgroundColor": "#0a0612"
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "ece3b6be-6b03-483c-b0fe-0988433184a2"
+      }
+    },
+    "owner": "mjohnson139"
   }
 }
