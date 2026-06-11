@@ -31,7 +31,9 @@ fidget/                          ← repo root
 │       ├── 002-reanimated-worklets-physics.md
 │       ├── 003-no-backend.md
 │       ├── 004-documentation-first-repo-structure.md
-│       └── 005-github-pages-prototype-hosting.md
+│       ├── 005-github-pages-prototype-hosting.md
+│       ├── 006-manual-gesture-port.md
+│       └── 007-procedural-bundled-assets.md
 └── FidgetApp/                   ← ALL Expo app code lives here
     ├── app/                     ← Expo Router screens
     ├── src/                     ← engine, components, audio, haptics, store
@@ -146,9 +148,11 @@ These constraints are set by ADRs. Do not work around them without opening a new
 
 ## Active Sprint
 
-**Sprint 01** — `context/sprint-01-requirements.md`
+**Sprint 02** — `context/sprint-02-requirements.md`
 
-Goal: Scaffold the Expo project, install all dependencies, initialize EAS, wire up Expo Workflows CI/CD. No physics or UI code — just a green baseline that boots on iOS, Android, and Web.
+Status: Implemented — full MVP (physics, Skia rendering, gestures, tuner, presets, sound, haptics, store config) built on Expo SDK 56. Remaining items are human-only: `eas init`, live device testing, EAS dashboard repo link. See the sprint doc's Manual Prerequisites.
+
+Note: the app uses Expo SDK 56 / Reanimated 4 / Skia 2.x — newer than the versions named in `context/01_architecture.md` (SDK 53 era). The sprint-02 doc has the reconciliation table. ADR-006 (manual gesture port) and ADR-007 (procedural assets) record where the implementation deliberately diverges from the architecture doc.
 
 ---
 

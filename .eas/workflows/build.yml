@@ -1,0 +1,24 @@
+# Expo Workflows: preview builds on every push to main.
+# Requires the GitHub repo to be linked to the EAS project and `eas init`
+# to have been run in FidgetApp/ (see context/sprint-01-requirements.md,
+# Manual Prerequisites).
+name: Preview builds
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build_android:
+    name: Build Android (preview)
+    type: build
+    params:
+      platform: android
+      profile: preview
+  build_ios:
+    name: Build iOS (preview)
+    type: build
+    params:
+      platform: ios
+      profile: preview

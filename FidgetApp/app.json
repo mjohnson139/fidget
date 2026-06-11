@@ -1,0 +1,48 @@
+{
+  "expo": {
+    "name": "Fidget",
+    "slug": "fidget",
+    "version": "1.0.0",
+    "scheme": "fidget",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0a0612",
+    "primaryColor": "#6dd9a0",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.mjohnson139.fidget",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.mjohnson139.fidget",
+      "adaptiveIcon": {
+        "backgroundColor": "#0a0612",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-audio",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 220,
+          "resizeMode": "contain",
+          "backgroundColor": "#0a0612"
+        }
+      ]
+    ]
+  }
+}
