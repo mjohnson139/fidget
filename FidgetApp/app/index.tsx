@@ -7,6 +7,7 @@ import { useAudioEngine } from '../src/audio/useAudioEngine';
 import { FidgetCanvas } from '../src/components/FidgetCanvas';
 import { GestureLayer } from '../src/components/GestureLayer';
 import { TunerPanel } from '../src/components/TunerPanel';
+import { useSkiaWebReady } from '../src/components/useSkiaWebReady';
 import { usePhysicsEngine } from '../src/engine/physics';
 import {
   DEFAULT_PARAMS,
@@ -29,6 +30,7 @@ const PARAM_PERSIST_DEBOUNCE_MS = 600;
 
 export default function FidgetScreen() {
   const insets = useSafeAreaInsets();
+  const skiaReady = useSkiaWebReady();
   const engine = usePhysicsEngine();
   const audio = useAudioEngine();
   const haptics = useHapticEngine();
@@ -238,12 +240,14 @@ export default function FidgetScreen() {
             setCanvasSize({ width, height });
           }}
         >
-          <FidgetCanvas
-            engine={engine}
-            width={canvasSize.width}
-            height={canvasSize.height}
-            uiParams={uiParams}
-          />
+          {skiaReady && (
+            <FidgetCanvas
+              engine={engine}
+              width={canvasSize.width}
+              height={canvasSize.height}
+              uiParams={uiParams}
+            />
+          )}
         </View>
       </GestureLayer>
 

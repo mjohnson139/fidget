@@ -98,15 +98,42 @@ The only JS-bridge crossings in the run loop, all via `useAnimatedReaction → r
 
 - **Project:** https://expo.dev/accounts/mjohnson139/projects/fidget
   (ID `ece3b6be-6b03-483c-b0fe-0988433184a2`)
-- **Android preview build:** https://expo.dev/accounts/mjohnson139/projects/fidget/builds/d721158e-10e4-4c42-bb74-aeda64fbc86a
-  — profile `preview`, internal distribution, installable APK. Android keystore
-  was generated automatically by EAS (`--non-interactive`). Build was
-  submitted successfully and was compiling on EAS at handoff; check the URL
-  for the final APK.
+- **Android preview build:** ✅ **finished** —
+  https://expo.dev/accounts/mjohnson139/projects/fidget/builds/d721158e-10e4-4c42-bb74-aeda64fbc86a
+  — profile `preview`, internal distribution, installable APK
+  (`https://expo.dev/artifacts/eas/YEHkjIuUjx29cLAcuOGmfgUjEGlwQIu0E2W87I1A00g.apk`).
+  Android keystore was generated automatically by EAS (`--non-interactive`).
+  Installs directly on any Android device — no developer account, no Expo Go.
 - **iOS preview build:** ⏳ **Human step** — internal distribution needs an
   Apple Developer account + registered device UDIDs (ad-hoc provisioning).
   Run `eas build --profile preview --platform ios` (it prompts for Apple
   credentials) or `eas device:create` first. Not attempted non-interactively.
+- **Web build (EAS Hosting):** ✅ **deployed** — https://fidget.expo.app
+  (production alias). Credential-free browser test surface. NOTE: this app
+  cannot run in **Expo Go** — `@shopify/react-native-skia` is a native module
+  Expo Go does not bundle, so a development/preview build (or web) is required.
+  See "Web target / CanvasKit" below.
+
+### Web target / CanvasKit (divergence — discovered during EAS handoff)
+
+`npx expo export -p web` *bundles* successfully (acceptance criterion 3), but
+that only proved the bundle compiles — it never rendered. The app's renderer is
+Skia, and on web Skia draws through **CanvasKit (WASM)**, which must be fetched
+and initialized *before* any `<Canvas>` mounts. The MVP shipped with no web
+CanvasKit loader, so the first web deploy was a blank screen.
+
+Fix (committed):
+- `npx setup-skia-web public` copies the version-matched `canvaskit.wasm` into
+  `FidgetApp/public/` (served at `/canvaskit.wasm`). This is wired into a
+  `postinstall` + `setup:skia-web` npm script so it is regenerated on install
+  and never re-introduces the blank-screen bug. The wasm is gitignored (8 MB,
+  regenerable from node_modules).
+- `src/components/useSkiaWebReady.ts` — returns `true` immediately on native;
+  on web it awaits `LoadSkiaWeb()` and flips to `true` once CanvasKit is ready.
+- `app/index.tsx` gates `<FidgetCanvas>` on `useSkiaWebReady()`.
+
+Web remains a secondary "feel-check" target, not the perf reference. The native
+APK is the real test surface.
 
 ---
 
