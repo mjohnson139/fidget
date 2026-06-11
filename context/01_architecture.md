@@ -3,6 +3,8 @@
 **Date:** 2026-05-15
 **Version:** 1.0 (MVP)
 
+> **Implementation status (Sprint 02, 2026-06-11):** Features 1–7 are implemented in `FidgetApp/`. The shipped stack is Expo SDK 56 / React Native 0.85 / Reanimated 4 / Skia 2.x — newer than the versions named below, which were current when this doc was written. For the version reconciliation table and deliberate divergences (gesture composition, asset pipeline, tuner state readout), see `context/sprint-02-requirements.md`, ADR-006, and ADR-007. Where this doc and the code disagree on API specifics, trust the code; where they disagree on intended behavior, trust `prototype.html`.
+
 ---
 
 ## Executive Summary
