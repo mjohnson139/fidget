@@ -325,7 +325,7 @@
     </svg>
   </button>
 
-  <div class="panel" id="panel">
+  <div class="panel hidden" id="panel">
     <div class="panel-titlebar" id="panel-titlebar">
       <div class="panel-title"><span class="grip-dots">⋮⋮</span>Tuner</div>
       <button class="panel-btn" id="panel-collapse" aria-label="Collapse">
@@ -377,7 +377,7 @@
 
     <label class="toggle">
       <span>spring back when released</span>
-      <input type="checkbox" id="spring-back" checked>
+      <input type="checkbox" id="spring-back">
       <span class="sw"></span>
     </label>
 
@@ -426,6 +426,27 @@
       <span class="sw"></span>
     </label>
 
+    <div class="row">
+      <label>spin coast (how long it keeps spinning) <span class="v" id="v-spinCoast">0.96</span></label>
+      <input type="range" id="spinCoast" min="0.80" max="0.999" step="0.005" value="0.96">
+    </div>
+
+    <div class="row">
+      <label>spin sensitivity (gear ratio) <span class="v" id="v-spinSensitivity">1.00</span></label>
+      <input type="range" id="spinSensitivity" min="0.25" max="4.0" step="0.05" value="1.0">
+    </div>
+
+    <div class="row">
+      <label>volume <span class="v" id="v-volume">0.80</span></label>
+      <input type="range" id="volume" min="0" max="1" step="0.05" value="0.8">
+    </div>
+
+    <label class="toggle">
+      <span>sound</span>
+      <input type="checkbox" id="sound-enabled" checked>
+      <span class="sw"></span>
+    </label>
+
     <h2>Render</h2>
 
     <div class="row">
@@ -446,6 +467,9 @@
       <span class="v" id="v-pos">0, 0</span></label></div>
     <div class="row"><label>extension
       <span class="v" id="v-ext">0%</span></label></div>
+    <div class="preset-row">
+      <button id="btn-reset">Reset to center</button>
+    </div>
     </div><!-- /.panel-body -->
   </div><!-- /.panel -->
 </div>
@@ -470,8 +494,8 @@
   }
   hideBtn.addEventListener('click', hidePanel);
   toolToggle.addEventListener('click', showPanel);
-  // Initial state: tool window visible, toggle hidden
-  toolToggle.classList.add('hidden');
+  // Initial state: panel hidden, wrench toggle visible
+  // (panel starts with class="panel hidden" in HTML)
 
   // Collapse / expand (just hides body, keeps title bar)
   collapseBtn.addEventListener('click', () => {
@@ -566,7 +590,7 @@
     falloff: 1.40,
     spring: 0.18,
     damp: 0.78,
-    springBack: true,
+    springBack: false,
 
     points: 10,
     ratio: 0.78,
@@ -577,6 +601,10 @@
 
     twist: 0.8,
     twistExtendedOnly: true,
+    spinCoast: 0.96,
+    spinSensitivity: 1.0,
+    soundEnabled: true,
+    volume: 0.8,
 
     outline: 60,
   };
@@ -602,7 +630,14 @@
   bind('min',    'min',    v => +v);
   bind('play',   'play',   v => +v, v => v.toFixed(2));
   bind('twist',  'twist',  v => +v, v => v.toFixed(2) + '°/ring');
+  bind('spinCoast',       'spinCoast',       v => +v, v => v.toFixed(3));
+  bind('spinSensitivity', 'spinSensitivity', v => +v, v => v.toFixed(2));
   bind('outline','outline',v => +v);
+  document.getElementById('volume').addEventListener('input', e => {
+    params.volume = +e.target.value;
+    document.getElementById('v-volume').textContent = params.volume.toFixed(2);
+    if (masterGain) masterGain.gain.value = params.volume;
+  });
 
   document.getElementById('twist-extended-only').addEventListener('change', e => {
     params.twistExtendedOnly = e.target.checked;
@@ -632,6 +667,116 @@
           slider.dispatchEvent(new Event('input'));
         }
       }
+    });
+  }
+
+  document.getElementById('btn-reset').addEventListener('click', () => {
+    kx = 0; ky = 0; kz = 0;
+    vx = 0; vy = 0; vz = 0;
+    userSpin = 0; userSpinVel = 0;
+    target = null;
+    mode = 'idle';
+  });
+
+  document.getElementById('sound-enabled').addEventListener('change', e => {
+    params.soundEnabled = e.target.checked;
+  });
+
+  // ——— Web Audio: metallic click synthesizer ———
+  let audioCtx = null;
+  let spinGain = null, spinFilter = null;
+  let masterGain = null;
+
+  function initAudio() {
+    if (audioCtx) {
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      return;
+    }
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    audioCtx.resume();
+
+    // iOS requires playing a silent buffer to unlock the audio hardware
+    const unlock = audioCtx.createBuffer(1, 1, audioCtx.sampleRate);
+    const unlockSrc = audioCtx.createBufferSource();
+    unlockSrc.buffer = unlock;
+    unlockSrc.connect(audioCtx.destination);
+    unlockSrc.start(0);
+
+    // Continuous metallic shimmer for spin — high-Q resonant noise
+    const bufLen = audioCtx.sampleRate * 2;
+    const noiseBuf = audioCtx.createBuffer(1, bufLen, audioCtx.sampleRate);
+    const nd = noiseBuf.getChannelData(0);
+    for (let i = 0; i < bufLen; i++) nd[i] = Math.random() * 2 - 1;
+    const noiseNode = audioCtx.createBufferSource();
+    noiseNode.buffer = noiseBuf;
+    noiseNode.loop = true;
+
+    spinFilter = audioCtx.createBiquadFilter();
+    spinFilter.type = 'bandpass';
+    spinFilter.frequency.value = 3200;
+    spinFilter.Q.value = 18;          // narrow & resonant = metallic shimmer
+
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = params.volume;
+    masterGain.connect(audioCtx.destination);
+
+    spinGain = audioCtx.createGain();
+    spinGain.gain.value = 0;
+
+    noiseNode.connect(spinFilter);
+    spinFilter.connect(spinGain);
+    spinGain.connect(masterGain);
+    noiseNode.start();
+  }
+
+  // Simple click: short noise burst through a high-pass filter
+  // Continuous pitch mapping — no discrete notes, just smooth physical variation
+  function posFreq() {
+    const dist = Math.hypot(kx, ky);
+    // 150 Hz (center) → 480 Hz (far out), logarithmic so it feels even
+    return 150 * Math.pow(3.2, Math.min(dist / 200, 1));
+  }
+
+  function spinFreq() {
+    // Spin cycles through a narrow range — just enough movement to feel alive
+    const t = (((userSpin % 360) + 360) % 360) / 360;
+    return 180 * Math.pow(2.2, t);
+  }
+
+  // Dry physical click: short sine burst, no harmonics, fast decay
+  function playClick(vol = 1.0, freq = 300) {
+    if (!audioCtx || !params.soundEnabled) return;
+    const t = audioCtx.currentTime;
+    const osc  = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(vol * 0.5, t);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.065);
+    osc.connect(gain);
+    gain.connect(masterGain);
+    osc.start(t);
+    osc.stop(t + 0.07);
+  }
+
+  // Soft descending ping on fling release
+  function playFling(vel) {
+    if (!audioCtx || !params.soundEnabled) return;
+    const t = audioCtx.currentTime;
+    const strength = Math.min(1.0, Math.abs(vel) / 12);
+    const startFreq = 1800 + strength * 1400;
+    [[startFreq, 0.22], [startFreq * 1.52, 0.12], [startFreq * 2.3, 0.07]].forEach(([f, g]) => {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(f, t);
+      osc.frequency.exponentialRampToValueAtTime(f * 0.4, t + 0.35);
+      gain.gain.setValueAtTime(g * strength, t);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.38);
+      osc.connect(gain);
+      gain.connect(masterGain);
+      osc.start(t);
+      osc.stop(t + 0.4);
     });
   }
 
@@ -684,6 +829,13 @@
   // Target (when dragging), null otherwise
   let target = null;
 
+  // Click accumulators — fire a click every CLICK_PX of lateral movement
+  // or every CLICK_DEG of spin. Tracks previous positions to compute deltas.
+  let prevKx = 0, prevKy = 0, prevSpin = 0;
+  let clickAccumMove = 0, clickAccumSpin = 0;
+  const CLICK_PX  = 16;   // lateral pixels per click
+  const CLICK_DEG = 9;    // spin degrees per click
+
   // User-driven spin (degrees). Two-finger twist accumulates here. Persists
   // when fingers lift, so you can twist and let it sit.
   let userSpin = 0;
@@ -726,6 +878,7 @@
 
   // Start single-finger joystick drag from a point
   function startOne(clientX, clientY) {
+    initAudio();
     mode = 'one';
     target = { x: kx, y: ky, z: kz };
     dragStartKx = kx; dragStartKy = ky; dragStartKz = kz;
@@ -735,6 +888,7 @@
 
   // Start two-finger twist+spread gesture
   function startTwo(e) {
+    initAudio();
     mode = 'two';
     target = null;                 // release the joystick target
     gestureStartAngle = twoFingerAngle(e);
@@ -749,23 +903,12 @@
   function updateOne(clientX, clientY) {
     const totalDx = clientX - dragStartPx;
     const totalDy = clientY - dragStartPy;
-    let nx = dragStartKx + totalDx;
-    let ny = dragStartKy + totalDy;
-    const lateralDist = Math.hypot(nx, ny);
-    let nz = dragStartKz;
-    if (lateralDist > params.float) {
-      const excess = lateralDist - params.float;
-      if (totalDy < 0) {
-        nz = Math.min(params.pull, dragStartKz + Math.min(excess, -totalDy * 0.8));
-      }
-      const k = params.float / lateralDist;
-      nx *= k; ny *= k;
-    } else {
-      if (totalDy < -10 && Math.abs(totalDx) < 30) {
-        nz = Math.max(0, Math.min(params.pull, dragStartKz - totalDy));
-      }
-    }
-    target = { x: nx, y: ny, z: Math.max(0, nz) };
+    const nz = Math.max(-params.pull, Math.min(params.pull, dragStartKz - totalDy * 0.8));
+    target = {
+      x: dragStartKx + totalDx,
+      y: dragStartKy + totalDy,
+      z: nz,
+    };
   }
 
   function updateTwo(e) {
@@ -776,8 +919,9 @@
     // Wrap to (-pi, pi)
     if (dAng >  Math.PI) dAng -= Math.PI * 2;
     if (dAng < -Math.PI) dAng += Math.PI * 2;
-    userSpin   += dAng * (180 / Math.PI);
-    userSpinVel = dAng * (180 / Math.PI); // deg/frame
+    const degDelta = dAng * (180 / Math.PI) * params.spinSensitivity;
+    userSpin   += degDelta;
+    userSpinVel = degDelta; // deg/frame
     lastGestureAngle = ang;
 
     // Spread: pinch out → extend (kz). Pinch in → collapse.
@@ -789,6 +933,9 @@
   }
 
   function endAll() {
+    if (mode === 'two' && Math.abs(userSpinVel) > 2) {
+      playFling(userSpinVel);
+    }
     mode = 'idle';
     target = null;
     cv.classList.remove('grabbing');
@@ -868,9 +1015,30 @@
     // No spring-back on rotation — the puzzle just keeps the orientation it was left in.
     if (mode !== 'two') {
       userSpin   += userSpinVel;
-      userSpinVel *= 0.96;       // friction
+      userSpinVel *= params.spinCoast;  // friction / coast
       if (Math.abs(userSpinVel) < 0.005) userSpinVel = 0;
     }
+
+    // Movement clicks — fire once per CLICK_PX of lateral travel or CLICK_DEG of spin
+    if (audioCtx && params.soundEnabled) {
+      const moveDelta = Math.hypot(kx - prevKx, ky - prevKy);
+      clickAccumMove += moveDelta;
+      if (clickAccumMove >= CLICK_PX) {
+        clickAccumMove -= CLICK_PX;
+        const speed = Math.hypot(vx, vy);
+        playClick(Math.min(0.9, 0.25 + speed * 0.08), posFreq());
+      }
+      const spinDelta = Math.abs(userSpin - prevSpin);
+      clickAccumSpin += spinDelta;
+      if (clickAccumSpin >= CLICK_DEG) {
+        clickAccumSpin -= CLICK_DEG;
+        playClick(Math.min(0.8, 0.2 + Math.abs(userSpinVel) * 0.04), spinFreq());
+      }
+    }
+    prevKx = kx; prevKy = ky; prevSpin = userSpin;
+
+    // Spin shimmer disabled — ratchet clicks only
+    if (spinGain) spinGain.gain.value = 0;
 
     posLabel.textContent =
       `${kx.toFixed(0)}, ${ky.toFixed(0)}`;
@@ -887,7 +1055,7 @@
     const cy = cv.clientHeight / 2;
 
     // Contact shadow
-    const extension = Math.min(1, kz / Math.max(1, params.pull));
+    const extension = Math.max(-1, Math.min(1, kz / Math.max(1, params.pull)));
     const shadowAlpha = 0.55 - extension * 0.25;
     const shadowR = params.outer * 0.95;
     const grd = ctx.createRadialGradient(cx, cy + 6, 0, cx, cy + 6, shadowR);
@@ -1010,6 +1178,12 @@
     ctx.lineWidth = 1.2;
     ctx.stroke();
   }
+
+  // iOS requires audio unlock on every user gesture — attach to the whole
+  // document so any tap (canvas, panel, wrench button) guarantees the context
+  // is running before the first click sound is needed.
+  document.addEventListener('touchstart', initAudio, { passive: true });
+  document.addEventListener('mousedown',  initAudio, { passive: true });
 
   tick();
 })();
